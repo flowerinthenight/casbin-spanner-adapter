@@ -1,11 +1,13 @@
 This library implements a [casbin](https://casbin.org/) adapter for [Cloud Spanner](https://cloud.google.com/spanner).
 
-## Installation
+To install:
+
 ```sh
 $ go get github.com/flowerinthenight/casbin-spanner-adapter
 ```
 
-## Example
+Example usage:
+
 ```go
 package main
 
