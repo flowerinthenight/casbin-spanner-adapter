@@ -1,6 +1,6 @@
 module github.com/flowerinthenight/casbin-spanner-adapter
 
-go 1.16
+go 1.15
 
 require (
 	github.com/casbin/casbin/v2 v2.31.3
