@@ -40,12 +40,15 @@ func main() {
 
 	// Load the policy from DB.
 	ok, err := e.AddPolicy("alice", "data1", "write")
-	log.Println(ok, err)
+	log.Println("AddPolicy:", ok, err)
+	ok, err = e.AddPolicy("bob", "data2", "read")
+	log.Println("AddPolicy:", ok, err)
 
 	e.LoadPolicy()
 
 	// Check the permission.
-	e.Enforce("alice", "data1", "read")
+	ok, err = e.Enforce("alice", "data1", "write")
+	log.Println("Enforce:", ok, err)
 
 	// Modify the policy.
 	// e.AddPolicy(...)

@@ -82,7 +82,7 @@ type NewAdapterOptions struct {
 	TableName            string                          // if not provided, default table will be 'casbin_rule'
 	SkipDatabaseCreation bool                            // if true, skip the database creation part in NewAdapter
 	SkipTableCreation    bool                            // if true, skip the table creation part in NewAdapter
-	AdminClient          *databasev1.DatabaseAdminClient // if non-nil, use as admin
+	AdminClient          *databasev1.DatabaseAdminClient // if non-nil, will use as the database admin client
 	Client               *spanner.Client                 // if provided, will use this connection instead
 }
 
@@ -303,8 +303,7 @@ values (
   '` + casbinRule.V2 + `',
   '` + casbinRule.V3 + `',
   '` + casbinRule.V4 + `',
-  '` + casbinRule.V5 + `'
-)`
+  '` + casbinRule.V5 + `')`
 
 			_, err := txn.Update(ctx, spanner.Statement{SQL: sql})
 			return err
