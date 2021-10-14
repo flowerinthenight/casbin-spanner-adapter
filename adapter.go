@@ -73,7 +73,7 @@ type Adapter struct {
 	filtered        bool
 	admin           *databasev1.DatabaseAdminClient
 	client          *spanner.Client
-	internalAdmin   bool // // in finalizer, close 'admin' only when internal
+	internalAdmin   bool // in finalizer, close 'admin' only when internal
 	internalClient  bool // in finalizer, close 'client' only when internal
 }
 
