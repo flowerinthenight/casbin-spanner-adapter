@@ -26,7 +26,7 @@ type CasbinRule struct {
 	V5    string `spanner:"v5"`
 }
 
-func (c CasbinRule) String() string {
+func (c CasbinRule) ToString() string {
 	var sb strings.Builder
 	sep := ", "
 
@@ -242,7 +242,7 @@ where t.table_catalog = ''
 // LoadPolicy loads policy from database.
 // Implements casbin Adapter interface.
 func (a *Adapter) LoadPolicy(cmodel model.Model) error {
-	log.Printf("LoadPolicy entry: cmodel=%+v", cmodel)
+	log.Printf("LoadPolicy entry: model[p]=%+v, model[g]=%+v", cmodel["p"], cmodel["g"])
 	casbinRules := []CasbinRule{}
 	stmt := spanner.Statement{
 		SQL: `select ptype, v0, v1, v2, v3, v4, v5 from ` + a.table,
@@ -274,7 +274,7 @@ func (a *Adapter) LoadPolicy(cmodel model.Model) error {
 
 	for _, cr := range casbinRules {
 		log.Printf("load %v", cr)
-		persist.LoadPolicyLine(cr.String(), cmodel)
+		persist.LoadPolicyLine(cr.ToString(), cmodel)
 	}
 
 	return nil
@@ -284,6 +284,30 @@ func (a *Adapter) LoadPolicy(cmodel model.Model) error {
 // Implements casbin Adapter interface.
 func (a *Adapter) SavePolicy(cmodel model.Model) error {
 	log.Printf("SavePolicy entry: cmodel=%+v", cmodel)
+	casbinRules := []CasbinRule{}
+	for ptype, ast := range cmodel["p"] {
+		for _, rule := range ast.Policy {
+			casbinRule := a.genPolicyLine(ptype, rule)
+			casbinRules = append(casbinRules, casbinRule)
+		}
+	}
+
+	for ptype, ast := range cmodel["g"] {
+		for _, rule := range ast.Policy {
+			casbinRule := a.genPolicyLine(ptype, rule)
+			casbinRules = append(casbinRules, casbinRule)
+		}
+	}
+
+	for _, cr := range casbinRules {
+		log.Printf("save: %+v", cr)
+	}
+
+	// if err := adapter.casbinRuleRepository.ReplaceAllCasbinRules(casbinRules); err != nil {
+	// 	return err
+	// }
+	// return nil
+
 	return nil
 }
 
@@ -395,7 +419,7 @@ create table ` + a.table + ` (
 ) primary key (ptype, v0, v1, v2, v3, v4, v5)`
 }
 
-func (a *Adapter) genPolicyLine(ptype string, rule []string) *CasbinRule {
+func (a *Adapter) genPolicyLine(ptype string, rule []string) CasbinRule {
 	line := CasbinRule{PType: ptype}
 	l := len(rule)
 	if l > 0 {
@@ -422,5 +446,5 @@ func (a *Adapter) genPolicyLine(ptype string, rule []string) *CasbinRule {
 		line.V5 = rule[5]
 	}
 
-	return &line
+	return line
 }
