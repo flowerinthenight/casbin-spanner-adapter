@@ -65,7 +65,6 @@ func main() {
 	// e.RemovePolicy(...)
 
 	// Save the policy back to DB.
-	e.SavePolicy()
-
-	time.Sleep(time.Second * 60)
+	err = e.SavePolicy()
+	log.Println("SavePolicy:", err)
 }
