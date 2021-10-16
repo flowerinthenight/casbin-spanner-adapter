@@ -12,45 +12,36 @@ Example usage:
 package main
 
 import (
-  "database/sql"
-  "os"
+    "flag"
+    "log"
+    "time"
 
-  "github.com/casbin/casbin/v2"
-  "github.com/cychiuae/casbin-pg-adapter"
+    "github.com/casbin/casbin/v2"
+    spanneradapter "github.com/flowerinthenight/casbin-spanner-adapter"
 )
 
 func main() {
-  connectionString := "postgresql://postgres:@localhost:5432/postgres?sslmode=disable"
-  db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
-  if err != nil {
-    panic(err)
-  }
+    a, _ := spanneradapter.NewAdapter(
+        "projects/{v}/instances/{v}/databases/{v}",
+        spanneradapter.NewAdapterOptions{
+            SkipDatabaseCreation: true,
+            SkipTableCreation:    false,
+        },
+    )
 
-  tableName := "casbin"
-  adapter, err := casbinpgadapter.NewAdapter(db, tableName)
-  // If you are using db schema
-  // myDBSchema := "mySchema"
-  // adapter, err := casbinpgadapter.NewAdapterWithDBSchema(db, myDBSchema, tableName)
-  if err != nil {
-    panic(err)
-  }
+	e, _ := casbin.NewEnforcer("rbac_model.conf", a)
 
-  enforcer, err := casbin.NewEnforcer("./examples/model.conf", adapter)
-  if err != nil {
-    panic(err)
-  }
+    // Load stored policy from database.
+    e.LoadPolicy()
 
-  // Load stored policy from database
-  enforcer.LoadPolicy()
+    // Do permission checking.
+    e.Enforce("alice", "data1", "write")
 
-  // Do permission checking
-  enforcer.Enforce("alice", "data1", "write")
+    // Do some mutations.
+    e.AddPolicy("alice", "data2", "write")
+    e.RemovePolicy("alice", "data1", "write")
 
-  // Do some mutations
-  enforcer.AddPolicy("alice", "data2", "write")
-  enforcer.RemovePolicy("alice", "data1", "write")
-
-  // Persist policy to database
-  enforcer.SavePolicy()
+    // Persist policy to database.
+    e.SavePolicy()
 }
 ```
