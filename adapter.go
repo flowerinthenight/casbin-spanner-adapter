@@ -86,10 +86,10 @@ type NewAdapterOptions struct {
 	Client               *spanner.Client           // if provided, will use this connection instead
 }
 
-// NewAdapter is the constructor for Adapter. Use the "projects/{project}/instances/{instance}/databases/{db}"
+// NewAdapter creates an Adapter instance. Use the "projects/{project}/instances/{instance}/databases/{db}"
 // format for 'db'. Instance creation is not supported. If database creation is not skipped, it will attempt
-// to create the database. If table creation is not skipped, it will attempt to create the table specified in
-// 'opts[0].TableName', or 'casbin_rule' if not provided.
+// to create the database. If table creation is not skipped, it will attempt to create the table specified
+// in 'opts[0].TableName', or 'casbin_rule' if not provided.
 func NewAdapter(db string, opts ...NewAdapterOptions) (*Adapter, error) {
 	if db == "" {
 		return nil, fmt.Errorf("database cannot be empty")
@@ -119,7 +119,6 @@ func NewAdapter(db string, opts ...NewAdapterOptions) (*Adapter, error) {
 		a.internalAdmin = true
 		a.admin, err = dbv1.NewDatabaseAdminClient(ctx)
 		if err != nil {
-			log.Printf("NewDatabaseAdminClient failed: %v", err)
 			return nil, err
 		}
 	}
@@ -128,7 +127,6 @@ func NewAdapter(db string, opts ...NewAdapterOptions) (*Adapter, error) {
 		a.internalClient = true
 		a.client, err = spanner.NewClient(ctx, a.database)
 		if err != nil {
-			log.Printf("spanner.NewClient failed: %v", err)
 			return nil, err
 		}
 	}
@@ -142,12 +140,10 @@ func NewAdapter(db string, opts ...NewAdapterOptions) (*Adapter, error) {
 			})
 
 			if err != nil {
-				log.Printf("CreateDatabase failed: %v", err)
 				return nil, err
 			}
 
 			if _, err := op.Wait(ctx); err != nil {
-				log.Printf("Wait on CreateDatabase failed: %v", err)
 				return nil, err
 			}
 		}
@@ -197,19 +193,16 @@ where t.table_catalog = ''
 
 	if !a.skipTableCreate {
 		if !tableExists() {
-			log.Printf("create table %v", a.table)
 			op, err := a.admin.UpdateDatabaseDdl(ctx, &adminpb.UpdateDatabaseDdlRequest{
 				Database:   a.database,
 				Statements: []string{a.createTableSql()},
 			})
 
 			if err != nil {
-				log.Printf("UpdateDatabaseDdl failed: %v", err)
 				return nil, err
 			}
 
 			if err := op.Wait(ctx); err != nil {
-				log.Printf("Wait on UpdateDatabaseDdl failed: %v", err)
 				return nil, err
 			}
 		}
@@ -229,16 +222,7 @@ where t.table_catalog = ''
 	return a, nil
 }
 
-// LoadPolicy(model model.Model) error
-// SavePolicy(model model.Model) error
-
-// This is part of the Auto-Save feature.
-// AddPolicy(sec string, ptype string, rule []string) error
-// RemovePolicy(sec string, ptype string, rule []string) error
-// RemoveFilteredPolicy(sec string, ptype string, fieldIndex int, fieldValues ...string) error
-
-// LoadPolicy loads policy from database.
-// Implements casbin Adapter interface.
+// LoadPolicy loads policy from database. Implements casbin Adapter interface.
 func (a *Adapter) LoadPolicy(cmodel model.Model) error {
 	casbinRules := []CasbinRule{}
 	stmt := spanner.Statement{
@@ -276,8 +260,7 @@ func (a *Adapter) LoadPolicy(cmodel model.Model) error {
 	return nil
 }
 
-// SavePolicy saves policy to database.
-// Implements casbin Adapter interface.
+// SavePolicy saves policy to database. Implements casbin Adapter interface.
 func (a *Adapter) SavePolicy(cmodel model.Model) error {
 	err := a.recreateTable()
 	if err != nil {
@@ -300,16 +283,16 @@ func (a *Adapter) SavePolicy(cmodel model.Model) error {
 	}
 
 	type mut_t struct {
-		mut   *spanner.Mutation
 		limit int
+		mut   *spanner.Mutation
 	}
 
 	ctx := context.Background()
 	done := make(chan error, 1)
 	ch := make(chan *mut_t)
 
-	// Start loading to Spanner. Let's do batch write in case data is way more
-	// than Spanner's mutation limits.
+	// Start loading to Spanner. Let's do batch write in case data
+	// is way more than Spanner's mutation limits.
 	go func() {
 		muts := []*spanner.Mutation{}
 		var cnt int
@@ -357,7 +340,7 @@ func (a *Adapter) SavePolicy(cmodel model.Model) error {
 	return <-done
 }
 
-// AddPolicy adds a policy rule to the storage.
+// AddPolicy adds a policy rule to the storage. Part of the auto-save feature.
 func (a *Adapter) AddPolicy(sec string, ptype string, rule []string) error {
 	casbinRule := a.genPolicyLine(ptype, rule)
 	_, err := a.client.ReadWriteTransaction(context.Background(),
@@ -382,13 +365,7 @@ values (
 	return err
 }
 
-// AddPolicies adds multiple policy rule to the storage.
-// func (a *Adapter) AddPolicies(sec string, ptype string, rules [][]string) error {
-// 	log.Printf("AddPolicies entry: sec=%v, ptype=%v, rules=%v", sec, ptype, rules)
-// 	return nil
-// }
-
-// RemovePolicy removes a policy rule from the storage.
+// RemovePolicy removes a policy rule from the storage. Part of the auto-save feature.
 func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 	casbinRule := a.genPolicyLine(ptype, rule)
 	_, err := a.client.ReadWriteTransaction(context.Background(),
@@ -424,13 +401,8 @@ where ptype = @ptype
 	return err
 }
 
-// RemovePolicies removes multiple policy rule from the storage.
-// func (a *Adapter) RemovePolicies(sec string, ptype string, rules [][]string) error {
-// 	log.Printf("RemovePolicies entry: sec=%v, ptype=%v, rules=%v", sec, ptype, rules)
-// 	return nil
-// }
-
 // RemoveFilteredPolicy removes policy rules that match the filter from the storage.
+// Part of the auto-save feature.
 func (a *Adapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int, fieldValues ...string) error {
 	selector := make(map[string]interface{})
 	if fieldIndex <= 0 && 0 < fieldIndex+len(fieldValues) {
@@ -485,27 +457,6 @@ func (a *Adapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int,
 
 	return err
 }
-
-// LoadFilteredPolicy loads only policy rules that match the filter.
-// func (a *Adapter) LoadFilteredPolicy(model model.Model, filter interface{}) error {
-// 	log.Println("LoadFilteredPolicy entry")
-// 	return nil
-// }
-
-// IsFiltered returns true if the loaded policy has been filtered.
-// func (a *Adapter) IsFiltered() bool { return a.filtered }
-
-// UpdatePolicy update oldRule to newPolicy permanently
-// func (a *Adapter) UpdatePolicy(sec string, ptype string, oldRule, newPolicy []string) error {
-// 	log.Println("UpdatePolicy entry")
-// 	return nil
-// }
-
-// UpdatePolicies updates some policy rules to storage, like db, redis.
-// func (a *Adapter) UpdatePolicies(sec string, ptype string, oldRules, newRules [][]string) error {
-// 	log.Println("UpdatePolicies entry")
-// 	return nil
-// }
 
 func (a *Adapter) recreateTable() error {
 	ctx := context.Background()
