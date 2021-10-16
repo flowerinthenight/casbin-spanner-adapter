@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"cloud.google.com/go/spanner"
-	databasev1 "cloud.google.com/go/spanner/admin/database/apiv1"
+	dbv1 "cloud.google.com/go/spanner/admin/database/apiv1"
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
 	"google.golang.org/api/iterator"
@@ -71,7 +71,7 @@ type Adapter struct {
 	skipDbCreate    bool
 	skipTableCreate bool
 	filtered        bool
-	admin           *databasev1.DatabaseAdminClient
+	admin           *dbv1.DatabaseAdminClient
 	client          *spanner.Client
 	internalAdmin   bool // in finalizer, close 'admin' only when internal
 	internalClient  bool // in finalizer, close 'client' only when internal
@@ -79,11 +79,11 @@ type Adapter struct {
 
 // NewAdapterOptions is the options you provide to NewAdapter().
 type NewAdapterOptions struct {
-	TableName            string                          // if not provided, default table will be 'casbin_rule'
-	SkipDatabaseCreation bool                            // if true, skip the database creation part in NewAdapter
-	SkipTableCreation    bool                            // if true, skip the table creation part in NewAdapter
-	AdminClient          *databasev1.DatabaseAdminClient // if non-nil, will use as the database admin client
-	Client               *spanner.Client                 // if provided, will use this connection instead
+	TableName            string                    // if not provided, default table will be 'casbin_rule'
+	SkipDatabaseCreation bool                      // if true, skip the database creation part in NewAdapter
+	SkipTableCreation    bool                      // if true, skip the table creation part in NewAdapter
+	AdminClient          *dbv1.DatabaseAdminClient // if non-nil, will use as the database admin client
+	Client               *spanner.Client           // if provided, will use this connection instead
 }
 
 // NewAdapter is the constructor for Adapter. Use the "projects/{project}/instances/{instance}/databases/{db}"
@@ -117,7 +117,7 @@ func NewAdapter(db string, opts ...NewAdapterOptions) (*Adapter, error) {
 	ctx := context.Background()
 	if a.admin == nil {
 		a.internalAdmin = true
-		a.admin, err = databasev1.NewDatabaseAdminClient(ctx)
+		a.admin, err = dbv1.NewDatabaseAdminClient(ctx)
 		if err != nil {
 			log.Printf("NewDatabaseAdminClient failed: %v", err)
 			return nil, err
@@ -388,8 +388,59 @@ where ptype = @ptype
 
 // RemoveFilteredPolicy removes policy rules that match the filter from the storage.
 func (a *Adapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int, fieldValues ...string) error {
-	log.Println("RemoveFilteredPolicy entry")
-	return nil
+	log.Printf("RemoveFilteredPolicy entry: sec=%v, ptype=%v, idx=%v, vals=%v", sec, ptype, fieldIndex, fieldValues)
+	selector := make(map[string]interface{})
+	if fieldIndex <= 0 && 0 < fieldIndex+len(fieldValues) {
+		if fieldValues[0-fieldIndex] != "" {
+			selector["v0"] = fieldValues[0-fieldIndex]
+		}
+	}
+
+	if fieldIndex <= 1 && 1 < fieldIndex+len(fieldValues) {
+		if fieldValues[1-fieldIndex] != "" {
+			selector["v1"] = fieldValues[1-fieldIndex]
+		}
+	}
+
+	if fieldIndex <= 2 && 2 < fieldIndex+len(fieldValues) {
+		if fieldValues[2-fieldIndex] != "" {
+			selector["v2"] = fieldValues[2-fieldIndex]
+		}
+	}
+
+	if fieldIndex <= 3 && 3 < fieldIndex+len(fieldValues) {
+		if fieldValues[3-fieldIndex] != "" {
+			selector["v3"] = fieldValues[3-fieldIndex]
+		}
+	}
+
+	if fieldIndex <= 4 && 4 < fieldIndex+len(fieldValues) {
+		if fieldValues[4-fieldIndex] != "" {
+			selector["v4"] = fieldValues[4-fieldIndex]
+		}
+	}
+
+	if fieldIndex <= 5 && 5 < fieldIndex+len(fieldValues) {
+		if fieldValues[5-fieldIndex] != "" {
+			selector["v5"] = fieldValues[5-fieldIndex]
+		}
+	}
+
+	sql := `delete from ` + a.table + ` where ptype = @ptype`
+	params := map[string]interface{}{"ptype": ptype}
+	for k, v := range selector {
+		sql = sql + fmt.Sprintf(" and %v = @val", k)
+		params["val"] = v
+	}
+
+	_, err := a.client.ReadWriteTransaction(context.Background(),
+		func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+			_, err := txn.Update(ctx, spanner.Statement{SQL: sql, Params: params})
+			return err
+		},
+	)
+
+	return err
 }
 
 // LoadFilteredPolicy loads only policy rules that match the filter.

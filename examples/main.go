@@ -49,6 +49,11 @@ func main() {
 	ok, err = e.RemovePolicy("todel", "data", "read")
 	log.Println("RemovePolicy:", ok, err)
 
+	ok, err = e.AddPolicy("todelf", "data", "read")
+	log.Println("AddPolicy:", ok, err)
+	ok, err = e.RemoveFilteredPolicy(0, "todelf")
+	log.Println("RemoveFilteredPolicy:", ok, err)
+
 	e.LoadPolicy()
 
 	// Check the permission.
