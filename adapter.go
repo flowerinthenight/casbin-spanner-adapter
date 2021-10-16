@@ -218,12 +218,10 @@ where t.table_catalog = ''
 	// Call this destructor when adapter is released.
 	runtime.SetFinalizer(a, func(adapter *Adapter) {
 		if adapter.client != nil && adapter.internalClient {
-			log.Println("close client")
 			adapter.client.Close()
 		}
 
 		if adapter.admin != nil && adapter.internalAdmin {
-			log.Println("close admin")
 			adapter.admin.Close()
 		}
 	})
@@ -242,7 +240,6 @@ where t.table_catalog = ''
 // LoadPolicy loads policy from database.
 // Implements casbin Adapter interface.
 func (a *Adapter) LoadPolicy(cmodel model.Model) error {
-	log.Printf("LoadPolicy entry: model[p]=%+v, model[g]=%+v", cmodel["p"], cmodel["g"])
 	casbinRules := []CasbinRule{}
 	stmt := spanner.Statement{
 		SQL: `select ptype, v0, v1, v2, v3, v4, v5 from ` + a.table,
@@ -273,7 +270,6 @@ func (a *Adapter) LoadPolicy(cmodel model.Model) error {
 	}
 
 	for _, cr := range casbinRules {
-		log.Printf("load %+v", cr)
 		persist.LoadPolicyLine(cr.ToString(), cmodel)
 	}
 
@@ -283,7 +279,11 @@ func (a *Adapter) LoadPolicy(cmodel model.Model) error {
 // SavePolicy saves policy to database.
 // Implements casbin Adapter interface.
 func (a *Adapter) SavePolicy(cmodel model.Model) error {
-	log.Printf("SavePolicy entry: cmodel=%+v", cmodel)
+	err := a.recreateTable()
+	if err != nil {
+		return err
+	}
+
 	casbinRules := []CasbinRule{}
 	for ptype, ast := range cmodel["p"] {
 		for _, rule := range ast.Policy {
@@ -299,21 +299,66 @@ func (a *Adapter) SavePolicy(cmodel model.Model) error {
 		}
 	}
 
-	for _, cr := range casbinRules {
-		log.Printf("save: %+v", cr)
+	type mut_t struct {
+		mut   *spanner.Mutation
+		limit int
 	}
 
-	// if err := adapter.casbinRuleRepository.ReplaceAllCasbinRules(casbinRules); err != nil {
-	// 	return err
-	// }
-	// return nil
+	ctx := context.Background()
+	done := make(chan error, 1)
+	ch := make(chan *mut_t)
 
-	return nil
+	// Start loading to Spanner. Let's do batch write in case data is way more
+	// than Spanner's mutation limits.
+	go func() {
+		muts := []*spanner.Mutation{}
+		var cnt int
+		for {
+			m := <-ch
+			cnt++
+			if m == nil {
+				var err error
+				if cnt > 0 {
+					_, err = a.client.Apply(ctx, muts)
+				}
+
+				done <- err
+				return
+			}
+
+			muts = append(muts, m.mut)
+			if cnt >= m.limit {
+				_, err := a.client.Apply(ctx, muts)
+				if err != nil {
+					done <- err
+					return
+				}
+
+				muts = []*spanner.Mutation{}
+				cnt = 0
+			}
+		}
+	}()
+
+	func() {
+		defer func() { ch <- nil }() // terminate receiver
+		cols := []string{"ptype", "v0", "v1", "v2", "v3", "v4", "v5"}
+		limit := (20000 / len(cols)) - 3
+		for _, cr := range casbinRules {
+			ch <- &mut_t{
+				limit: limit,
+				mut: spanner.InsertOrUpdate(a.table, cols, []interface{}{
+					cr.PType, cr.V0, cr.V1, cr.V2, cr.V3, cr.V4, cr.V5,
+				}),
+			}
+		}
+	}()
+
+	return <-done
 }
 
 // AddPolicy adds a policy rule to the storage.
 func (a *Adapter) AddPolicy(sec string, ptype string, rule []string) error {
-	log.Printf("AddPolicy entry: sec=%v, ptype=%v rule=%v", sec, ptype, rule)
 	casbinRule := a.genPolicyLine(ptype, rule)
 	_, err := a.client.ReadWriteTransaction(context.Background(),
 		func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
@@ -345,7 +390,6 @@ values (
 
 // RemovePolicy removes a policy rule from the storage.
 func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
-	log.Printf("RemovePolicy entry: sec=%v, ptype=%v, rule=%v", sec, ptype, rule)
 	casbinRule := a.genPolicyLine(ptype, rule)
 	_, err := a.client.ReadWriteTransaction(context.Background(),
 		func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
@@ -388,7 +432,6 @@ where ptype = @ptype
 
 // RemoveFilteredPolicy removes policy rules that match the filter from the storage.
 func (a *Adapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int, fieldValues ...string) error {
-	log.Printf("RemoveFilteredPolicy entry: sec=%v, ptype=%v, idx=%v, vals=%v", sec, ptype, fieldIndex, fieldValues)
 	selector := make(map[string]interface{})
 	if fieldIndex <= 0 && 0 < fieldIndex+len(fieldValues) {
 		if fieldValues[0-fieldIndex] != "" {
@@ -465,7 +508,6 @@ func (a *Adapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int,
 // }
 
 func (a *Adapter) recreateTable() error {
-	log.Println("recreateTable entry")
 	ctx := context.Background()
 	op, err := a.admin.UpdateDatabaseDdl(ctx, &adminpb.UpdateDatabaseDdlRequest{
 		Database: a.database,
@@ -476,12 +518,10 @@ func (a *Adapter) recreateTable() error {
 	})
 
 	if err != nil {
-		log.Printf("UpdateDatabaseDdl failed: %v", err)
 		return err
 	}
 
 	if err := op.Wait(ctx); err != nil {
-		log.Printf("Wait on UpdateDatabaseDdl failed: %v", err)
 		return err
 	}
 
