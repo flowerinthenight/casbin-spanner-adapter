@@ -273,7 +273,7 @@ func (a *Adapter) LoadPolicy(cmodel model.Model) error {
 	}
 
 	for _, cr := range casbinRules {
-		log.Printf("load %v", cr)
+		log.Printf("load %+v", cr)
 		persist.LoadPolicyLine(cr.ToString(), cmodel)
 	}
 
@@ -346,7 +346,38 @@ values (
 // RemovePolicy removes a policy rule from the storage.
 func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 	log.Printf("RemovePolicy entry: sec=%v, ptype=%v, rule=%v", sec, ptype, rule)
-	return nil
+	casbinRule := a.genPolicyLine(ptype, rule)
+	_, err := a.client.ReadWriteTransaction(context.Background(),
+		func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
+			sql := `
+delete from ` + a.table + `
+where ptype = @ptype
+  and v0 = @v0
+  and v1 = @v1
+  and v2 = @v2
+  and v3 = @v3
+  and v4 = @v4
+  and v5 = @v5`
+
+			stmt := spanner.Statement{
+				SQL: sql,
+				Params: map[string]interface{}{
+					"ptype": casbinRule.PType,
+					"v0":    casbinRule.V0,
+					"v1":    casbinRule.V1,
+					"v2":    casbinRule.V2,
+					"v3":    casbinRule.V3,
+					"v4":    casbinRule.V4,
+					"v5":    casbinRule.V5,
+				},
+			}
+
+			_, err := txn.Update(ctx, stmt)
+			return err
+		},
+	)
+
+	return err
 }
 
 // RemovePolicies removes multiple policy rule from the storage.

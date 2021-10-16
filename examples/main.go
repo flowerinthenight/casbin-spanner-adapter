@@ -44,6 +44,11 @@ func main() {
 	ok, err = e.AddPolicy("bob", "data2", "read")
 	log.Println("AddPolicy:", ok, err)
 
+	ok, err = e.AddPolicy("todel", "data", "read")
+	log.Println("AddPolicy:", ok, err)
+	ok, err = e.RemovePolicy("todel", "data", "read")
+	log.Println("RemovePolicy:", ok, err)
+
 	e.LoadPolicy()
 
 	// Check the permission.
