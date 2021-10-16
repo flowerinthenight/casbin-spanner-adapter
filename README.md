@@ -29,7 +29,7 @@ func main() {
         },
     )
 
-	e, _ := casbin.NewEnforcer("rbac_model.conf", a)
+    e, _ := casbin.NewEnforcer("rbac_model.conf", a)
 
     // Load stored policy from database.
     e.LoadPolicy()
