@@ -348,16 +348,23 @@ func (a *Adapter) AddPolicy(sec string, ptype string, rule []string) error {
 			sql := `
 insert ` + a.table + `
   (ptype, v0, v1, v2, v3, v4, v5)
-values (
-  '` + casbinRule.PType + `',
-  '` + casbinRule.V0 + `',
-  '` + casbinRule.V1 + `',
-  '` + casbinRule.V2 + `',
-  '` + casbinRule.V3 + `',
-  '` + casbinRule.V4 + `',
-  '` + casbinRule.V5 + `')`
+values
+  (@ptype, @v0, @v1, @v2, @v3, @v4, @v5)`
 
-			_, err := txn.Update(ctx, spanner.Statement{SQL: sql})
+			stmt := spanner.Statement{
+				SQL: sql,
+				Params: map[string]interface{}{
+					"ptype": casbinRule.PType,
+					"v0":    casbinRule.V0,
+					"v1":    casbinRule.V1,
+					"v2":    casbinRule.V2,
+					"v3":    casbinRule.V3,
+					"v4":    casbinRule.V4,
+					"v5":    casbinRule.V5,
+				},
+			}
+
+			_, err := txn.Update(ctx, stmt)
 			return err
 		},
 	)
