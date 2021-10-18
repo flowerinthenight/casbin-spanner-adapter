@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/casbin/casbin/v2"
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/lib/pq"
 )
 
 func testGetPolicy(t *testing.T, e *casbin.Enforcer, res [][]string) {
@@ -137,48 +135,6 @@ func testAutoSave(t *testing.T, driverName string, dataSourceName string, dbSpec
 	testGetPolicy(t, e, [][]string{{"alice", "data1", "read"}, {"bob", "data2", "write"}})
 }
 
-func testFilteredPolicy(t *testing.T, driverName string, dataSourceName string, dbSpecified ...bool) {
-	// Initialize some policy in DB.
-	initPolicy(t, driverName, dataSourceName, dbSpecified...)
-	// Note: you don't need to look at the above code
-	// if you already have a working DB with policy inside.
-
-	// Now the DB has policy, so we can provide a normal use case.
-	// Create an adapter and an enforcer.
-	// NewEnforcer() will load the policy automatically.
-	a, _ := NewAdapter(driverName, dataSourceName, dbSpecified...)
-	e, _ := casbin.NewEnforcer("examples/rbac_model.conf")
-	// Now set the adapter
-	e.SetAdapter(a)
-
-	var err error
-	logErr := func(action string) {
-		if err != nil {
-			t.Fatalf("test action[%s] failed, err: %v", action, err)
-		}
-	}
-
-	// Load only alice's policies
-	err = e.LoadFilteredPolicy(Filter{V0: []string{"alice"}})
-	logErr("LoadFilteredPolicy")
-	testGetPolicy(t, e, [][]string{{"alice", "data1", "read"}})
-
-	// Load only bob's policies
-	err = e.LoadFilteredPolicy(Filter{V0: []string{"bob"}})
-	logErr("LoadFilteredPolicy2")
-	testGetPolicy(t, e, [][]string{{"bob", "data2", "write"}})
-
-	// Load policies for data2_admin
-	err = e.LoadFilteredPolicy(Filter{V0: []string{"data2_admin"}})
-	logErr("LoadFilteredPolicy3")
-	testGetPolicy(t, e, [][]string{{"data2_admin", "data2", "read"}, {"data2_admin", "data2", "write"}})
-
-	// Load policies for alice and bob
-	err = e.LoadFilteredPolicy(Filter{V0: []string{"alice", "bob"}})
-	logErr("LoadFilteredPolicy4")
-	testGetPolicy(t, e, [][]string{{"alice", "data1", "read"}, {"bob", "data2", "write"}})
-}
-
 func testRemovePolicies(t *testing.T, driverName string, dataSourceName string, dbSpecified ...bool) {
 	// Initialize some policy in DB.
 	initPolicy(t, driverName, dataSourceName, dbSpecified...)
@@ -221,71 +177,6 @@ func testRemovePolicies(t *testing.T, driverName string, dataSourceName string, 
 	testGetPolicy(t, e, [][]string{{"max", "data1", "delete"}})
 }
 
-func testAddPolicies(t *testing.T, driverName string, dataSourceName string, dbSpecified ...bool) {
-	// Initialize some policy in DB.
-	initPolicy(t, driverName, dataSourceName, dbSpecified...)
-	// Note: you don't need to look at the above code
-	// if you already have a working DB with policy inside.
-
-	// Now the DB has policy, so we can provide a normal use case.
-	// Create an adapter and an enforcer.
-	// NewEnforcer() will load the policy automatically.
-	a, _ := NewAdapter(driverName, dataSourceName, dbSpecified...)
-	e, _ := casbin.NewEnforcer("examples/rbac_model.conf")
-
-	// Now set the adapter
-	e.SetAdapter(a)
-
-	var err error
-	logErr := func(action string) {
-		if err != nil {
-			t.Fatalf("test action[%s] failed, err: %v", action, err)
-		}
-	}
-
-	err = a.AddPolicies("p", "p", [][]string{{"max", "data2", "read"}, {"max", "data1", "write"}})
-	logErr("AddPolicies")
-
-	// Load policies for max
-	err = e.LoadFilteredPolicy(Filter{V0: []string{"max"}})
-	logErr("LoadFilteredPolicy")
-
-	testGetPolicy(t, e, [][]string{{"max", "data2", "read"}, {"max", "data1", "write"}})
-}
-
-func testUpdatePolicies(t *testing.T, driverName string, dataSourceName string, dbSpecified ...bool) {
-	// Initialize some policy in DB.
-	initPolicy(t, driverName, dataSourceName, dbSpecified...)
-	// Note: you don't need to look at the above code
-	// if you already have a working DB with policy inside.
-
-	// Now the DB has policy, so we can provide a normal use case.
-	// Create an adapter and an enforcer.
-	// NewEnforcer() will load the policy automatically.
-	a, _ := NewAdapter(driverName, dataSourceName, dbSpecified...)
-	e, _ := casbin.NewEnforcer("examples/rbac_model.conf")
-
-	// Now set the adapter
-	e.SetAdapter(a)
-
-	var err error
-	logErr := func(action string) {
-		if err != nil {
-			t.Fatalf("test action[%s] failed, err: %v", action, err)
-		}
-	}
-
-	err = a.UpdatePolicy("p", "p", []string{"bob", "data2", "write"}, []string{"alice", "data2", "write"})
-	logErr("UpdatePolicy")
-
-	testGetPolicy(t, e, [][]string{{"alice", "data1", "read"}, {"alice", "data2", "write"}, {"data2_admin", "data2", "read"}, {"data2_admin", "data2", "write"}})
-
-	err = a.UpdatePolicies("p", "p", [][]string{{"alice", "data1", "read"}, {"alice", "data2", "write"}}, [][]string{{"bob", "data1", "read"}, {"bob", "data2", "write"}})
-	logErr("UpdatePolicies")
-
-	testGetPolicy(t, e, [][]string{{"bob", "data1", "read"}, {"bob", "data2", "write"}, {"data2_admin", "data2", "read"}, {"data2_admin", "data2", "write"}})
-}
-
 func TestAdapters(t *testing.T) {
 	// You can also use the following way to use an existing DB "abc":
 	// testSaveLoad(t, "mysql", "root:@tcp(127.0.0.1:3306)/abc", true)
@@ -296,14 +187,6 @@ func TestAdapters(t *testing.T) {
 	testAutoSave(t, "mysql", "root:@tcp(127.0.0.1:3306)/")
 	testAutoSave(t, "postgres", "user=postgres password=postgres host=127.0.0.1 port=5432 sslmode=disable")
 
-	testFilteredPolicy(t, "mysql", "root:@tcp(127.0.0.1:3306)/")
-
-	testAddPolicies(t, "mysql", "root:@tcp(127.0.0.1:3306)/")
-	testAddPolicies(t, "postgres", "user=postgres password=postgres host=127.0.0.1 port=5432 sslmode=disable")
-
 	testRemovePolicies(t, "mysql", "root:@tcp(127.0.0.1:3306)/")
 	testRemovePolicies(t, "postgres", "user=postgres password=postgres host=127.0.0.1 port=5432 sslmode=disable")
-
-	testUpdatePolicies(t, "mysql", "root:@tcp(127.0.0.1:3306)/")
-	testUpdatePolicies(t, "postgres", "user=postgres password=postgres host=127.0.0.1 port=5432 sslmode=disable")
 }
