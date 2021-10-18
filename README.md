@@ -23,10 +23,7 @@ import (
 func main() {
     a, _ := spanneradapter.NewAdapter(
         "projects/{v}/instances/{v}/databases/{v}",
-        spanneradapter.NewAdapterOptions{
-            SkipDatabaseCreation: true,
-            SkipTableCreation:    false,
-        },
+        spanneradapter.WithSkipDatabaseCreation(true),
     )
 
     e, _ := casbin.NewEnforcer("rbac_model.conf", a)
