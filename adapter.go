@@ -16,53 +16,46 @@ import (
 	adminpb "google.golang.org/genproto/googleapis/spanner/admin/database/v1"
 )
 
-type CasbinRule struct {
-	PType string `spanner:"ptype"`
-	V0    string `spanner:"v0"`
-	V1    string `spanner:"v1"`
-	V2    string `spanner:"v2"`
-	V3    string `spanner:"v3"`
-	V4    string `spanner:"v4"`
-	V5    string `spanner:"v5"`
+type Option interface {
+	Apply(*Adapter)
 }
 
-func (c CasbinRule) ToString() string {
-	var sb strings.Builder
-	sep := ", "
+type withTableName string
 
-	sb.WriteString(c.PType)
-	if len(c.V0) > 0 {
-		sb.WriteString(sep)
-		sb.WriteString(c.V0)
-	}
+func (w withTableName) Apply(a *Adapter) { a.table = string(w) }
 
-	if len(c.V1) > 0 {
-		sb.WriteString(sep)
-		sb.WriteString(c.V1)
-	}
+// WithTableName sets adapter's internal table name. Default is 'casbin_rule'.
+func WithTableName(v string) Option { return withTableName(v) }
 
-	if len(c.V2) > 0 {
-		sb.WriteString(sep)
-		sb.WriteString(c.V2)
-	}
+type withSkipDatabaseCreation bool
 
-	if len(c.V3) > 0 {
-		sb.WriteString(sep)
-		sb.WriteString(c.V3)
-	}
+func (w withSkipDatabaseCreation) Apply(a *Adapter) { a.skipDbCreate = bool(w) }
 
-	if len(c.V4) > 0 {
-		sb.WriteString(sep)
-		sb.WriteString(c.V4)
-	}
+// WithSkipDatabaseCreation allows caller to skip the database creation.
+func WithSkipDatabaseCreation(v bool) Option { return withSkipDatabaseCreation(v) }
 
-	if len(c.V5) > 0 {
-		sb.WriteString(sep)
-		sb.WriteString(c.V5)
-	}
+type withSkipTableCreation bool
 
-	return sb.String()
-}
+func (w withSkipTableCreation) Apply(a *Adapter) { a.skipTableCreate = bool(w) }
+
+// WithSkipTableCreation allows caller to skip the table creation.
+func WithSkipTableCreation(v bool) Option { return withSkipTableCreation(v) }
+
+type withDatabaseAdminClient struct{ c *dbv1.DatabaseAdminClient }
+
+func (w withDatabaseAdminClient) Apply(a *Adapter) { a.admin = w.c }
+
+// WithDatabaseAdminClient sets the adapter's database client. If not provided, an internal client is
+// created using the environment's default credentials.
+func WithDatabaseAdminClient(c *dbv1.DatabaseAdminClient) Option { return withDatabaseAdminClient{c} }
+
+type withSpannerClient struct{ c *spanner.Client }
+
+func (w withSpannerClient) Apply(a *Adapter) { a.client = w.c }
+
+// WithSpannerClient sets the adapter's Spanner client. If not provided, an
+// internal client is created using the environment's default credentials.
+func WithSpannerClient(c *spanner.Client) Option { return withSpannerClient{c} }
 
 // Adapter represents a Cloud Spanner-based adapter for policy storage.
 type Adapter struct {
@@ -77,20 +70,10 @@ type Adapter struct {
 	internalClient  bool // in finalizer, close 'client' only when internal
 }
 
-// NewAdapterOptions is the options you provide to NewAdapter().
-type NewAdapterOptions struct {
-	TableName            string                    // if not provided, default table will be 'casbin_rule'
-	SkipDatabaseCreation bool                      // if true, skip the database creation part in NewAdapter
-	SkipTableCreation    bool                      // if true, skip the table creation part in NewAdapter
-	AdminClient          *dbv1.DatabaseAdminClient // if non-nil, will use as the database admin client
-	Client               *spanner.Client           // if provided, will use this connection instead
-}
-
 // NewAdapter creates an Adapter instance. Use the "projects/{project}/instances/{instance}/databases/{db}"
 // format for 'db'. Instance creation is not supported. If database creation is not skipped, it will attempt
-// to create the database. If table creation is not skipped, it will attempt to create the table specified
-// in 'opts[0].TableName', or 'casbin_rule' if not provided.
-func NewAdapter(db string, opts ...NewAdapterOptions) (*Adapter, error) {
+// to create the database. If table creation is not skipped, it will attempt to create the table as well.
+func NewAdapter(db string, opts ...Option) (*Adapter, error) {
 	if db == "" {
 		return nil, fmt.Errorf("database cannot be empty")
 	}
@@ -101,12 +84,8 @@ func NewAdapter(db string, opts ...NewAdapterOptions) (*Adapter, error) {
 	}
 
 	a := &Adapter{database: db}
-	if len(opts) > 0 {
-		a.table = opts[0].TableName
-		a.skipDbCreate = opts[0].SkipDatabaseCreation
-		a.skipTableCreate = opts[0].SkipTableCreation
-		a.admin = opts[0].AdminClient
-		a.client = opts[0].Client
+	for _, opt := range opts {
+		opt.Apply(a)
 	}
 
 	if a.table == "" {
@@ -131,7 +110,11 @@ func NewAdapter(db string, opts ...NewAdapterOptions) (*Adapter, error) {
 		}
 	}
 
-	if !a.skipDbCreate {
+	if err = func() error { // create db if needed
+		if a.skipDbCreate {
+			return nil
+		}
+
 		_, err := a.admin.GetDatabase(ctx, &adminpb.GetDatabaseRequest{Name: a.database})
 		if err != nil {
 			op, err := a.admin.CreateDatabase(ctx, &adminpb.CreateDatabaseRequest{
@@ -140,13 +123,17 @@ func NewAdapter(db string, opts ...NewAdapterOptions) (*Adapter, error) {
 			})
 
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			if _, err := op.Wait(ctx); err != nil {
-				return nil, err
+				return err
 			}
 		}
+
+		return nil
+	}(); err != nil {
+		return nil, err
 	}
 
 	tableExists := func() bool {
@@ -191,21 +178,27 @@ where t.table_catalog = ''
 		return found
 	}
 
-	if !a.skipTableCreate {
-		if !tableExists() {
-			op, err := a.admin.UpdateDatabaseDdl(ctx, &adminpb.UpdateDatabaseDdlRequest{
-				Database:   a.database,
-				Statements: []string{a.createTableSql()},
-			})
-
-			if err != nil {
-				return nil, err
-			}
-
-			if err := op.Wait(ctx); err != nil {
-				return nil, err
-			}
+	if err = func() error { // create table if needed
+		if a.skipTableCreate || tableExists() {
+			return nil
 		}
+
+		op, err := a.admin.UpdateDatabaseDdl(ctx, &adminpb.UpdateDatabaseDdlRequest{
+			Database:   a.database,
+			Statements: []string{a.createTableSql()},
+		})
+
+		if err != nil {
+			return err
+		}
+
+		if err := op.Wait(ctx); err != nil {
+			return err
+		}
+
+		return nil
+	}(); err != nil {
+		return nil, err
 	}
 
 	// Call this destructor when adapter is released.
@@ -527,4 +520,52 @@ func (a *Adapter) genPolicyLine(ptype string, rule []string) CasbinRule {
 	}
 
 	return line
+}
+
+type CasbinRule struct {
+	PType string `spanner:"ptype"`
+	V0    string `spanner:"v0"`
+	V1    string `spanner:"v1"`
+	V2    string `spanner:"v2"`
+	V3    string `spanner:"v3"`
+	V4    string `spanner:"v4"`
+	V5    string `spanner:"v5"`
+}
+
+func (c CasbinRule) ToString() string {
+	var sb strings.Builder
+	sep := ", "
+
+	sb.WriteString(c.PType)
+	if len(c.V0) > 0 {
+		sb.WriteString(sep)
+		sb.WriteString(c.V0)
+	}
+
+	if len(c.V1) > 0 {
+		sb.WriteString(sep)
+		sb.WriteString(c.V1)
+	}
+
+	if len(c.V2) > 0 {
+		sb.WriteString(sep)
+		sb.WriteString(c.V2)
+	}
+
+	if len(c.V3) > 0 {
+		sb.WriteString(sep)
+		sb.WriteString(c.V3)
+	}
+
+	if len(c.V4) > 0 {
+		sb.WriteString(sep)
+		sb.WriteString(c.V4)
+	}
+
+	if len(c.V5) > 0 {
+		sb.WriteString(sep)
+		sb.WriteString(c.V5)
+	}
+
+	return sb.String()
 }

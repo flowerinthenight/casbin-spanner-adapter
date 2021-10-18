@@ -21,10 +21,8 @@ func main() {
 	flag.Parse()
 	a, err := spanneradapter.NewAdapter(
 		*dbstr,
-		spanneradapter.NewAdapterOptions{
-			SkipDatabaseCreation: true,
-			SkipTableCreation:    false,
-		},
+		spanneradapter.WithSkipDatabaseCreation(true),
+		spanneradapter.WithSkipTableCreation(false),
 	)
 
 	if err != nil {
