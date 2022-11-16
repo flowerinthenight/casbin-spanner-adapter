@@ -1,4 +1,4 @@
-This library implements a [Casbin](https://casbin.org/) [adapter](https://casbin.io/docs/adapters) for [Cloud Spanner](https://cloud.google.com/spanner).
+This library implements a [Casbin](https://casbin.io/) [adapter](https://casbin.io/docs/adapters) for [Cloud Spanner](https://cloud.google.com/spanner).
 
 To install:
 
