@@ -1,3 +1,5 @@
+[![main](https://github.com/flowerinthenight/casbin-spanner-adapter/actions/workflows/main.yml/badge.svg)](https://github.com/flowerinthenight/casbin-spanner-adapter/actions/workflows/main.yml)
+
 This library implements a [Casbin](https://casbin.io/) [adapter](https://casbin.io/docs/adapters) for [Cloud Spanner](https://cloud.google.com/spanner).
 
 To install:
