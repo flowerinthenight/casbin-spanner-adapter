@@ -448,8 +448,6 @@ func (a *Adapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int,
 		params["val"] = v
 	}
 
-	log.Printf("q=%v, params=%v", sql, params)
-
 	_, err := a.client.ReadWriteTransaction(context.Background(),
 		func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 			_, err := txn.Update(ctx, spanner.Statement{SQL: sql, Params: params})
