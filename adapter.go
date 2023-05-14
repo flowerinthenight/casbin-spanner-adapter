@@ -117,9 +117,11 @@ func NewAdapter(db string, opts ...Option) (*Adapter, error) {
 
 		_, err := a.admin.GetDatabase(ctx, &adminpb.GetDatabaseRequest{Name: a.database})
 		if err != nil {
+			var q strings.Builder
+			fmt.Fprintf(&q, "CREATE DATABASE %s", matches[2])
 			op, err := a.admin.CreateDatabase(ctx, &adminpb.CreateDatabaseRequest{
 				Parent:          matches[1],
-				CreateStatement: "CREATE DATABASE `" + matches[2] + "`",
+				CreateStatement: q.String(),
 			})
 
 			if err != nil {
@@ -137,15 +139,15 @@ func NewAdapter(db string, opts ...Option) (*Adapter, error) {
 	}
 
 	tableExists := func() bool {
-		sql := `
-select t.table_name
-from information_schema.tables as t
-where t.table_catalog = ''
-  and t.table_schema = ''
-  and t.table_name = @name`
+		var q strings.Builder
+		fmt.Fprintf(&q, "select t.table_name ")
+		fmt.Fprintf(&q, "from information_schema.tables as t ")
+		fmt.Fprintf(&q, "where t.table_catalog = '' ")
+		fmt.Fprintf(&q, "and t.table_schema = '' ")
+		fmt.Fprintf(&q, "and t.table_name = @name")
 
 		stmt := spanner.Statement{
-			SQL:    sql,
+			SQL:    q.String(),
 			Params: map[string]interface{}{"name": a.table},
 		}
 
@@ -218,11 +220,10 @@ where t.table_catalog = ''
 // LoadPolicy loads policy from database. Implements casbin Adapter interface.
 func (a *Adapter) LoadPolicy(cmodel model.Model) error {
 	casbinRules := []CasbinRule{}
-	stmt := spanner.Statement{
-		SQL: `select ptype, v0, v1, v2, v3, v4, v5 from ` + a.table,
-	}
-
+	var q strings.Builder
+	fmt.Fprintf(&q, "select ptype, v0, v1, v2, v3, v4, v5 from %s", a.table)
 	ctx := context.Background()
+	stmt := spanner.Statement{SQL: q.String()}
 	iter := a.client.Single().Query(ctx, stmt)
 	defer iter.Stop()
 	for {
@@ -338,14 +339,13 @@ func (a *Adapter) AddPolicy(sec string, ptype string, rule []string) error {
 	casbinRule := a.genPolicyLine(ptype, rule)
 	_, err := a.client.ReadWriteTransaction(context.Background(),
 		func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
-			sql := `
-insert ` + a.table + `
-  (ptype, v0, v1, v2, v3, v4, v5)
-values
-  (@ptype, @v0, @v1, @v2, @v3, @v4, @v5)`
+			var q strings.Builder
+			fmt.Fprintf(&q, "insert %s ", a.table)
+			fmt.Fprintf(&q, "(ptype, v0, v1, v2, v3, v4, v5) ")
+			fmt.Fprintf(&q, "values (@ptype, @v0, @v1, @v2, @v3, @v4, @v5)")
 
 			stmt := spanner.Statement{
-				SQL: sql,
+				SQL: q.String(),
 				Params: map[string]interface{}{
 					"ptype": casbinRule.PType,
 					"v0":    casbinRule.V0,
@@ -370,18 +370,18 @@ func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 	casbinRule := a.genPolicyLine(ptype, rule)
 	_, err := a.client.ReadWriteTransaction(context.Background(),
 		func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
-			sql := `
-delete from ` + a.table + `
-where ptype = @ptype
-  and v0 = @v0
-  and v1 = @v1
-  and v2 = @v2
-  and v3 = @v3
-  and v4 = @v4
-  and v5 = @v5`
+			var q strings.Builder
+			fmt.Fprintf(&q, "delete from %s ", a.table)
+			fmt.Fprintf(&q, "where ptype = @ptype ")
+			fmt.Fprintf(&q, "and v0 = @v0 ")
+			fmt.Fprintf(&q, "and v1 = @v1 ")
+			fmt.Fprintf(&q, "and v2 = @v2 ")
+			fmt.Fprintf(&q, "and v3 = @v3 ")
+			fmt.Fprintf(&q, "and v4 = @v4 ")
+			fmt.Fprintf(&q, "and v5 = @v5")
 
 			stmt := spanner.Statement{
-				SQL: sql,
+				SQL: q.String(),
 				Params: map[string]interface{}{
 					"ptype": casbinRule.PType,
 					"v0":    casbinRule.V0,
@@ -448,6 +448,8 @@ func (a *Adapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int,
 		params["val"] = v
 	}
 
+	log.Printf("q=%v, params=%v", sql, params)
+
 	_, err := a.client.ReadWriteTransaction(context.Background(),
 		func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 			_, err := txn.Update(ctx, spanner.Statement{SQL: sql, Params: params})
@@ -463,7 +465,7 @@ func (a *Adapter) recreateTable() error {
 	op, err := a.admin.UpdateDatabaseDdl(ctx, &adminpb.UpdateDatabaseDdlRequest{
 		Database: a.database,
 		Statements: []string{
-			`DROP TABLE ` + a.table,
+			fmt.Sprintf("DROP TABLE %s", a.table),
 			a.createTableSql(),
 		},
 	})
@@ -480,16 +482,17 @@ func (a *Adapter) recreateTable() error {
 }
 
 func (a *Adapter) createTableSql() string {
-	return `
-create table ` + a.table + ` (
-    ptype string(MAX),
-    v0 string(MAX),
-    v1 string(MAX),
-    v2 string(MAX),
-    v3 string(MAX),
-    v4 string(MAX),
-    v5 string(MAX),
-) primary key (ptype, v0, v1, v2, v3, v4, v5)`
+	var q strings.Builder
+	fmt.Fprintf(&q, "create table %s (", a.table)
+	fmt.Fprintf(&q, "ptype string(MAX), ")
+	fmt.Fprintf(&q, "v0 string(MAX), ")
+	fmt.Fprintf(&q, "v1 string(MAX), ")
+	fmt.Fprintf(&q, "v2 string(MAX), ")
+	fmt.Fprintf(&q, "v3 string(MAX), ")
+	fmt.Fprintf(&q, "v4 string(MAX), ")
+	fmt.Fprintf(&q, "v5 string(MAX)) ")
+	fmt.Fprintf(&q, "primary key (ptype, v0, v1, v2, v3, v4, v5)")
+	return q.String()
 }
 
 func (a *Adapter) genPolicyLine(ptype string, rule []string) CasbinRule {
