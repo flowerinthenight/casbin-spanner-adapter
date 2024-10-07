@@ -444,8 +444,8 @@ func (a *Adapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int,
 	sql := `delete from ` + a.table + ` where ptype = @ptype`
 	params := map[string]interface{}{"ptype": ptype}
 	for k, v := range selector {
-		sql = sql + fmt.Sprintf(" and %v = @val", k)
-		params["val"] = v
+		sql = sql + fmt.Sprintf(" and %s = @%s", k, k)
+		params[k] = v
 	}
 
 	_, err := a.client.ReadWriteTransaction(context.Background(),
