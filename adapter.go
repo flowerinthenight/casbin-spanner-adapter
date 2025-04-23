@@ -494,78 +494,78 @@ func (a *Adapter) createTableSql() string {
 }
 
 func (a *Adapter) genPolicyLine(ptype string, rule []string) CasbinRule {
-	line := CasbinRule{PType: ptype}
+	line := CasbinRule{PType: spanner.NullString{StringVal: ptype, Valid: true}}
 	l := len(rule)
 	if l > 0 {
-		line.V0 = rule[0]
+		line.V0 = spanner.NullString{StringVal: rule[0], Valid: true}
 	}
 
 	if l > 1 {
-		line.V1 = rule[1]
+		line.V1 = spanner.NullString{StringVal: rule[1], Valid: true}
 	}
 
 	if l > 2 {
-		line.V2 = rule[2]
+		line.V2 = spanner.NullString{StringVal: rule[2], Valid: true}
 	}
 
 	if l > 3 {
-		line.V3 = rule[3]
+		line.V3 = spanner.NullString{StringVal: rule[3], Valid: true}
 	}
 
 	if l > 4 {
-		line.V4 = rule[4]
+		line.V4 = spanner.NullString{StringVal: rule[4], Valid: true}
 	}
 
 	if l > 5 {
-		line.V5 = rule[5]
+		line.V5 = spanner.NullString{StringVal: rule[5], Valid: true}
 	}
 
 	return line
 }
 
 type CasbinRule struct {
-	PType string `spanner:"ptype"`
-	V0    string `spanner:"v0"`
-	V1    string `spanner:"v1"`
-	V2    string `spanner:"v2"`
-	V3    string `spanner:"v3"`
-	V4    string `spanner:"v4"`
-	V5    string `spanner:"v5"`
+	PType spanner.NullString `spanner:"ptype"`
+	V0    spanner.NullString `spanner:"v0"`
+	V1    spanner.NullString `spanner:"v1"`
+	V2    spanner.NullString `spanner:"v2"`
+	V3    spanner.NullString `spanner:"v3"`
+	V4    spanner.NullString `spanner:"v4"`
+	V5    spanner.NullString `spanner:"v5"`
 }
 
 func (c CasbinRule) ToString() string {
 	var sb strings.Builder
 	sep := ", "
 
-	sb.WriteString(c.PType)
-	if len(c.V0) > 0 {
+	sb.WriteString(c.PType.StringVal)
+	if len(c.V0.StringVal) > 0 {
 		sb.WriteString(sep)
-		sb.WriteString(c.V0)
+		sb.WriteString(c.V0.StringVal)
 	}
 
-	if len(c.V1) > 0 {
+	if len(c.V1.StringVal) > 0 {
 		sb.WriteString(sep)
-		sb.WriteString(c.V1)
+		sb.WriteString(c.V1.StringVal)
 	}
 
-	if len(c.V2) > 0 {
+	if len(c.V2.StringVal) > 0 {
 		sb.WriteString(sep)
-		sb.WriteString(c.V2)
+		sb.WriteString(c.V2.StringVal)
 	}
 
-	if len(c.V3) > 0 {
+	if len(c.V3.StringVal) > 0 {
 		sb.WriteString(sep)
-		sb.WriteString(c.V3)
+		sb.WriteString(c.V3.StringVal)
 	}
 
-	if len(c.V4) > 0 {
+	if len(c.V4.StringVal) > 0 {
 		sb.WriteString(sep)
-		sb.WriteString(c.V4)
+		sb.WriteString(c.V4.StringVal)
 	}
 
-	if len(c.V5) > 0 {
+	if len(c.V5.StringVal) > 0 {
 		sb.WriteString(sep)
-		sb.WriteString(c.V5)
+		sb.WriteString(c.V5.StringVal)
 	}
 
 	return sb.String()
