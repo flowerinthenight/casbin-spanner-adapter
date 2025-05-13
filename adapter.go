@@ -398,7 +398,8 @@ func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 				},
 			}
 
-			_, err := txn.Update(ctx, stmt)
+			r, err := txn.Update(ctx, stmt)
+			log.Printf("Deleted %v rows", r)
 			return err
 		},
 	)
