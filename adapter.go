@@ -361,6 +361,11 @@ func (a *Adapter) AddPolicy(sec string, ptype string, rule []string) error {
 			return err
 		},
 	)
+	if err != nil {
+		log.Printf("Failed to add policy: %v", err)
+	} else {
+		log.Printf("Successfully added policy: %v", casbinRule.ToString())
+	}
 
 	return err
 }
@@ -397,6 +402,11 @@ func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 			return err
 		},
 	)
+	if err != nil {
+		log.Printf("Failed to remove policy: %v", err)
+	} else {
+		log.Printf("Successfully removed policy rule: %v", casbinRule.ToString())
+	}
 
 	return err
 }
@@ -454,6 +464,11 @@ func (a *Adapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int,
 			return err
 		},
 	)
+	if err != nil {
+		log.Printf("Failed to remove filtered policy: %v", err)
+	} else {
+		log.Printf("Successfully removed filtered policy: %v", selector)
+	}
 
 	return err
 }
@@ -520,6 +535,7 @@ func (a *Adapter) genPolicyLine(ptype string, rule []string) CasbinRule {
 		line.V5 = spanner.NullString{StringVal: rule[5], Valid: true}
 	}
 
+	log.Printf("Generated policy line: %v", line.ToString())
 	return line
 }
 
