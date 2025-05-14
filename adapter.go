@@ -390,28 +390,62 @@ func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 	_, err := a.client.ReadWriteTransaction(context.Background(),
 		func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 			var q strings.Builder
-			fmt.Fprintf(&q, "delete from %s ", a.table)
-			fmt.Fprintf(&q, "where ptype = @ptype ")
-			fmt.Fprintf(&q, "and v0 = @v0 ")
-			fmt.Fprintf(&q, "and v1 = @v1 ")
-			fmt.Fprintf(&q, "and v2 = @v2 ")
-			fmt.Fprintf(&q, "and v3 = @v3 ")
-			fmt.Fprintf(&q, "and v4 = @v4 ")
-			fmt.Fprintf(&q, "and v5 = @v5")
-
 			stmt := spanner.Statement{
-				SQL: q.String(),
-				Params: map[string]interface{}{
-					"ptype": casbinRule.PType,
-					"v0":    casbinRule.V0,
-					"v1":    casbinRule.V1,
-					"v2":    casbinRule.V2,
-					"v3":    casbinRule.V3,
-					"v4":    casbinRule.V4,
-					"v5":    casbinRule.V5,
-				},
+				SQL:    q.String(),
+				Params: map[string]interface{}{},
+			}
+			fmt.Fprintf(&q, "delete from %s ", a.table)
+			if casbinRule.PType.Valid {
+				fmt.Fprintf(&q, "where ptype = @ptype ")
+				stmt.Params["ptype"] = casbinRule.PType
+			} else {
+				fmt.Fprintf(&q, "where ptype is null ")
 			}
 
+			if casbinRule.V0.Valid {
+				fmt.Fprintf(&q, "and v0 = @v0 ")
+				stmt.Params["v0"] = casbinRule.V0
+			} else {
+				fmt.Fprintf(&q, "and v0 is null ")
+			}
+
+			if casbinRule.V1.Valid {
+				fmt.Fprintf(&q, "and v1 = @v1 ")
+				stmt.Params["v1"] = casbinRule.V1
+			} else {
+				fmt.Fprintf(&q, "and v1 is null ")
+			}
+
+			if casbinRule.V2.Valid {
+				fmt.Fprintf(&q, "and v2 = @v2 ")
+				stmt.Params["v2"] = casbinRule.V2
+			} else {
+				fmt.Fprintf(&q, "and v2 is null ")
+			}
+
+			if casbinRule.V3.Valid {
+				fmt.Fprintf(&q, "and v3 = @v3 ")
+				stmt.Params["v3"] = casbinRule.V3
+			} else {
+				fmt.Fprintf(&q, "and v3 is null ")
+			}
+
+			if casbinRule.V4.Valid {
+				fmt.Fprintf(&q, "and v4 = @v4 ")
+				stmt.Params["v4"] = casbinRule.V4
+			} else {
+				fmt.Fprintf(&q, "and v4 is null ")
+			}
+
+			if casbinRule.V5.Valid {
+				fmt.Fprintf(&q, "and v5 = @v5 ")
+				stmt.Params["v5"] = casbinRule.V5
+			} else {
+				fmt.Fprintf(&q, "and v5 is null ")
+			}
+
+			stmt.SQL = q.String()
+			a.logger.Printf("Delete statement: %v", stmt.SQL)
 			r, err := txn.Update(ctx, stmt)
 			a.logger.Printf("Deleted %v rows", r)
 			return err
