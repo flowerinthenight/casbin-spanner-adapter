@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"runtime"
 	"strings"
@@ -57,6 +58,13 @@ func (w withSpannerClient) Apply(a *Adapter) { a.client = w.c }
 // internal client is created using the environment's default credentials.
 func WithSpannerClient(c *spanner.Client) Option { return withSpannerClient{c} }
 
+type withLogger struct{ l *log.Logger }
+
+func (w withLogger) Apply(a *Adapter) { a.logger = w.l }
+
+// WithLogger sets the adapter's logger object.
+func WithLogger(v *log.Logger) Option { return withLogger{v} }
+
 // Adapter represents a Cloud Spanner-based adapter for policy storage.
 type Adapter struct {
 	database        string
@@ -68,6 +76,7 @@ type Adapter struct {
 	client          *spanner.Client
 	internalAdmin   bool // in finalizer, close 'admin' only when internal
 	internalClient  bool // in finalizer, close 'client' only when internal
+	logger          *log.Logger
 }
 
 // NewAdapter creates an Adapter instance. Use the "projects/{project}/instances/{instance}/databases/{db}"
@@ -90,6 +99,11 @@ func NewAdapter(db string, opts ...Option) (*Adapter, error) {
 
 	if a.table == "" {
 		a.table = "casbin_rule"
+	}
+
+	if a.logger == nil {
+		prefix := "[casbin-spanner-adapter] "
+		a.logger = log.New(os.Stdout, prefix, log.LstdFlags)
 	}
 
 	var err error
@@ -161,14 +175,14 @@ func NewAdapter(db string, opts ...Option) (*Adapter, error) {
 			}
 
 			if err != nil {
-				log.Println(err)
+				a.logger.Println(err)
 				break
 			}
 
 			var tbl string
 			err = row.Columns(&tbl)
 			if err != nil {
-				log.Println(err)
+				a.logger.Println(err)
 				break
 			}
 
@@ -233,14 +247,14 @@ func (a *Adapter) LoadPolicy(cmodel model.Model) error {
 		}
 
 		if err != nil {
-			log.Println(err)
+			a.logger.Println(err)
 			break
 		}
 
 		var v CasbinRule
 		err = row.ToStruct(&v)
 		if err != nil {
-			log.Println(err)
+			a.logger.Println(err)
 			break
 		}
 
@@ -362,9 +376,9 @@ func (a *Adapter) AddPolicy(sec string, ptype string, rule []string) error {
 		},
 	)
 	if err != nil {
-		log.Printf("Failed to add policy: %v", err)
+		a.logger.Printf("Failed to add policy: %v", err)
 	} else {
-		log.Printf("Successfully added policy: %v", casbinRule.ToString())
+		a.logger.Printf("Successfully added policy: %v", casbinRule.ToString())
 	}
 
 	return err
@@ -433,14 +447,14 @@ func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 			stmt.SQL = q.String()
 			log.Printf("Delete statement: %v", stmt.SQL)
 			r, err := txn.Update(ctx, stmt)
-			log.Printf("Deleted %v rows", r)
+			a.logger.Printf("Deleted %v rows", r)
 			return err
 		},
 	)
 	if err != nil {
-		log.Printf("Failed to remove policy: %v", err)
+		a.logger.Printf("Failed to remove policy: %v", err)
 	} else {
-		log.Printf("Successfully removed policy rule: %v", casbinRule.ToString())
+		a.logger.Printf("Successfully removed policy rule: %v", casbinRule.ToString())
 	}
 
 	return err
@@ -500,9 +514,9 @@ func (a *Adapter) RemoveFilteredPolicy(sec string, ptype string, fieldIndex int,
 		},
 	)
 	if err != nil {
-		log.Printf("Failed to remove filtered policy: %v", err)
+		a.logger.Printf("Failed to remove filtered policy: %v", err)
 	} else {
-		log.Printf("Successfully removed filtered policy: %v", selector)
+		a.logger.Printf("Successfully removed filtered policy: %v", selector)
 	}
 
 	return err
@@ -570,7 +584,7 @@ func (a *Adapter) genPolicyLine(ptype string, rule []string) CasbinRule {
 		line.V5 = spanner.NullString{StringVal: rule[5], Valid: true}
 	}
 
-	log.Printf("Generated policy line: %v", line.ToString())
+	a.logger.Printf("Generated policy line: %v", line.ToString())
 	return line
 }
 
