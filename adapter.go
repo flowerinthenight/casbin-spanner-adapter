@@ -445,7 +445,7 @@ func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 			}
 
 			stmt.SQL = q.String()
-			log.Printf("Delete statement: %v", stmt.SQL)
+			a.logger.Printf("Delete statement: %v", stmt.SQL)
 			r, err := txn.Update(ctx, stmt)
 			a.logger.Printf("Deleted %v rows", r)
 			return err
