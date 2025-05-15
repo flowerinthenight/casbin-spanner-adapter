@@ -434,14 +434,14 @@ func (a *Adapter) RemovePolicy(sec string, ptype string, rule []string) error {
 				fmt.Fprintf(&q, "and v4 = @v4 ")
 				stmt.Params["v4"] = casbinRule.V4
 			} else {
-				fmt.Fprintf(&q, "and v4 is null ")
+				fmt.Fprintf(&q, "and (v4 is null or v4 = '') ")
 			}
 
 			if casbinRule.V5.Valid {
 				fmt.Fprintf(&q, "and v5 = @v5 ")
 				stmt.Params["v5"] = casbinRule.V5
 			} else {
-				fmt.Fprintf(&q, "and v5 is null ")
+				fmt.Fprintf(&q, "and (v5 is null or v5 = '') ")
 			}
 
 			stmt.SQL = q.String()
