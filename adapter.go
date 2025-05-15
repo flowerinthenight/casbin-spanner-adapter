@@ -361,12 +361,13 @@ func (a *Adapter) AddPolicy(sec string, ptype string, rule []string) error {
 			stmt := spanner.Statement{
 				SQL: q.String(),
 				Params: map[string]interface{}{
-					"v0": casbinRule.V0,
-					"v1": casbinRule.V1,
-					"v2": casbinRule.V2,
-					"v3": casbinRule.V3,
-					"v4": casbinRule.V4,
-					"v5": casbinRule.V5,
+					"ptype": casbinRule.PType,
+					"v0":    casbinRule.V0,
+					"v1":    casbinRule.V1,
+					"v2":    casbinRule.V2,
+					"v3":    casbinRule.V3,
+					"v4":    casbinRule.V4,
+					"v5":    casbinRule.V5,
 				},
 			}
 
